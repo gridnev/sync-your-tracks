@@ -8,7 +8,7 @@ import akka.http.scaladsl.client.RequestBuilding.{Get}
   */
 class EndomondoClient(host: String) extends BaseClient(host) {
   def getWorkouts(): Future[Seq[Workout]] = {
-    val authToken = "ZoYSf1ySSSeW01N0YjJKHw"
+    val authToken = "***"
     sendAndReceiveAs[Response[Seq[Workout]]](Get(s"/mobile/api/workouts?authToken=$authToken&fields=simple&maxResults=10"))
       .map(_.data)
   }
