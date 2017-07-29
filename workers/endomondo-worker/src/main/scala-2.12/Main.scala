@@ -5,7 +5,9 @@ import scala.concurrent.ExecutionContext.Implicits.global
   */
 object Main extends App {
   val host = "api.mobile.endomondo.com"
-  val client = new EndomondoClient(host)
+  val email = "denis.gridnev@gmail.com"
+  val password = "e1n2d3o4"
+  val client = new EndomondoClient(host, email, password)
 
   for {
     workouts <- client.getWorkouts()

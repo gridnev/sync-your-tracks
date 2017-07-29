@@ -1,16 +1,31 @@
 package clients
 
 import scala.concurrent.Future
-import akka.http.scaladsl.client.RequestBuilding.{Get}
-
+import akka.http.scaladsl.client.RequestBuilding.Get
+import akka.util.ByteString
 /**
   * Created by Denis Gridnev on 23.07.2017.
   */
-class EndomondoClient(host: String) extends BaseClient(host) {
+class EndomondoClient(host: String, email: String, password: String) extends BaseClient(host) {
   def getWorkouts(): Future[Seq[Workout]] = {
-    val authToken = "***"
-    sendAndReceiveAs[Response[Seq[Workout]]](Get(s"/mobile/api/workouts?authToken=$authToken&fields=simple&maxResults=10"))
-      .map(_.data)
+    for {
+      authToken <- getAuthToken()
+      result <- sendAndReceiveAs[Response[Seq[Workout]]](Get(s"/mobile/api/workouts?authToken=$authToken&fields=simple&maxResults=10"))
+    } yield result.data
+  }
+
+  private def getAuthToken(): Future[String] = {
+    sendAndReceive(
+      Get(s"/mobile/auth?action=pair&deviceId=27132407-5b55-5863-b150-7925b8d092a2&country=RU&email=$email&password=$password"),
+      s => s.entity.dataBytes.runFold(ByteString(""))(_ ++ _)) map { byteString =>
+      val regex = "authToken=(\\w+)".r
+      byteString.utf8String.split("\\r\\n|\\n|\\r") collectFirst {
+        case regex(token) => token
+      } getOrElse {
+        println(s"Auth not completed. Resp: ${byteString.utf8String}")
+        throw new Error
+      }
+    }
   }
 }
 

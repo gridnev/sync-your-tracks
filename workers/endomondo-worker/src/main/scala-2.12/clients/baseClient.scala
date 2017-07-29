@@ -22,7 +22,7 @@ class BaseClient(host: String) extends JsonSupport {
   def sendAndReceiveAs[T: Manifest](httpRequest: HttpRequest): Future[T] =
     sendAndReceive(httpRequest, response => unmarshaller[T].apply(response.entity))
 
-  private def sendAndReceive[T](request: HttpRequest, f: HttpResponse => Future[T]): Future[T] =
+  def sendAndReceive[T](request: HttpRequest, f: HttpResponse => Future[T]): Future[T] =
     Source.single(request)
       .via(httpClient)
       .mapAsync(1) { response =>
