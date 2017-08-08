@@ -1,4 +1,4 @@
-name := "endomondo-worker"
+name := "strava-worker"
 
 version := "1.0"
 

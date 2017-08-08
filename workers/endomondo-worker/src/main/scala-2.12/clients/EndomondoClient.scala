@@ -1,17 +1,21 @@
 package clients
 
 import scala.concurrent.Future
-import akka.http.scaladsl.client.RequestBuilding.Get
+import akka.http.scaladsl.client.RequestBuilding.{Get, Post}
 import akka.util.ByteString
 /**
   * Created by Denis Gridnev on 23.07.2017.
   */
-class EndomondoClient(host: String, email: String, password: String) extends BaseClient(host) {
+class EndomondoClient(host: String, port: Int, email: String, password: String) extends BaseClient(host, port) {
   def getWorkouts(): Future[Seq[Workout]] = {
     for {
       authToken <- getAuthToken()
       result <- sendAndReceiveAs[Response[Seq[Workout]]](Get(s"/mobile/api/workouts?authToken=$authToken&fields=simple&maxResults=10"))
     } yield result.data
+  }
+
+  def postWorkouts(workouts: String): Future[Unit] = {
+    sendAndReceive(Post(uri="/endomondo/workouts", Some(workouts)), _ => Future.unit)
   }
 
   private def getAuthToken(): Future[String] = {

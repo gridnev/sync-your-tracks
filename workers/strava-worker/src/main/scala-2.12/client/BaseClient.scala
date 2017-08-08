@@ -1,4 +1,4 @@
-package clients
+package client
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -10,7 +10,7 @@ import serializers.JsonSupport
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
-  * Created by Denis Gridnev on 23.07.2017.
+  * Created by Denis Gridnev on 29.07.2017.
   */
 class BaseClient(host: String, port: Int) extends JsonSupport {
   implicit val system = ActorSystem("endomondo-worker")
