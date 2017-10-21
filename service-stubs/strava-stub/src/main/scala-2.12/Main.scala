@@ -32,6 +32,16 @@ object Main extends App {
             }
         }
       }
+    } ~
+    (pathPrefix("strava") & pathPrefix("workouts") & post) {
+      decodeRequest {
+        entity(as[Any]) {
+          a => complete {
+            println(a)
+            "Ok"
+          }
+        }
+      }
     }
 
   val bindingFuture = Http().bindAndHandle(route, "localhost", 8001)

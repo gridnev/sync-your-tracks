@@ -10,6 +10,10 @@ class StravaClient(host: String, port: Int) extends BaseClient(host, port) {
   def getWorkouts(): Future[Seq[Workout]] = {
     sendAndReceiveAs[Seq[Workout]](Get(s"/workouts"))
   }
+
+  def postWorkouts(workouts: String): Future[Unit] = {
+    sendAndReceive(Post(uri="/strava/workouts", Some(workouts)), _ => Future.unit)
+  }
 }
 
 case class Workout(distance: String, elapsed_time: String, id: String)

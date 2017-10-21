@@ -45,8 +45,8 @@ object Main extends App {
     .withBootstrapServers("localhost:9092")
 
   Consumer.plainSource(consumerSettings, Subscriptions.topics("endomondo"))
-    .mapAsync(1) { msg =>
+    .map { msg =>
       val task = JsonParser(msg.value).convertTo[Task]
-      client.postWorkouts(task.workouts.toJson.compactPrint)
-    }.runWith(Sink.ignore)
+      task.workouts.toJson.compactPrint
+    }.runWith(Sink.foreach(client.postWorkouts))
 }
