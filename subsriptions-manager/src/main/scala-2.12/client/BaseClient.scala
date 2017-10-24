@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes}
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.scaladsl.Sink
 import serializers.JsonSupport
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -22,7 +22,7 @@ class BaseClient(host: String, port: Int)(implicit system: ActorSystem) extends 
     sendAndReceive(httpRequest, response => unmarshaller[T].apply(response.entity))
 
   def sendAndReceive[T](request: HttpRequest, f: HttpResponse => Future[T]): Future[T] =
-    Source.single(request)
+    akka.stream.scaladsl.Source.single(request)
       .via(httpClient)
       .mapAsync(1) { response =>
         if (response.status.isSuccess || response.status == StatusCodes.NotFound) f(response)

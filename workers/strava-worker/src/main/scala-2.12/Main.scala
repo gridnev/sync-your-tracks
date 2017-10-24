@@ -1,44 +1,28 @@
 import akka.actor.ActorSystem
 import akka.kafka.scaladsl.{Consumer, Producer}
-import akka.kafka.{ConsumerSettings, ProducerMessage, ProducerSettings, Subscriptions}
+import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
 import akka.stream._
-import client.{StravaClient, Workout}
+import client.StravaClient
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, StringDeserializer, StringSerializer}
 import spray.json._
-import DefaultJsonProtocol._
 import akka.stream.scaladsl._
+import model.JsonFormats._
+import model.Task
+import DefaultJsonProtocol._
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 /**
   * Created by Denis Gridnev on 29.07.2017.
   */
 object Main extends App {
-
-  case class Task(source: Source, target: Target, workouts: Option[Seq[Workout]] = None)
-  case class Source(id: String/*, data:ConnectionData*/)
-  case class ConnectionData()
-
-  case class Target(id: String/*, data:String*/)
-
-    implicit val t1 = jsonFormat1(Source)
-    implicit val t2 = jsonFormat1(Target)
-    implicit val t3 = jsonFormat3(Workout)
-    implicit val colorFormat = jsonFormat3(Task)
-
-
-  val host = "localhost"
-  val port = 8001
-
-  val client = new StravaClient(host, port)
-
   implicit val system = ActorSystem("kafka")
-  implicit val executionContext: ExecutionContext = system.dispatcher
+  implicit val executionContext = system.dispatcher
   implicit val materializer = ActorMaterializer()
 
-
+  val client = new StravaClient(host = "localhost", port = 8001)
   val consumerSettings = ConsumerSettings(system, new ByteArrayDeserializer, new StringDeserializer)
     .withBootstrapServers("localhost:9092")
     .withGroupId("group1")
