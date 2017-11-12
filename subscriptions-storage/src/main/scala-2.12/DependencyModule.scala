@@ -1,9 +1,10 @@
-package services
-
 import com.softwaremill.macwire.wire
+import controllers.SubscriptionController
 import dao.SubscriptionsDaoImpl
+import services.SubscriptionServiceImpl
 
 trait DependencyModule {
-  lazy val dao = wire[SubscriptionsDaoImpl]
-  lazy val service = wire[SubscriptionServiceImpl]
+  lazy val subscriptionDao = wire[SubscriptionsDaoImpl]
+  lazy val subscriptionService = wire[SubscriptionServiceImpl]
+  lazy val subscriptionController = wire[SubscriptionController]
 }
