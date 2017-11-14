@@ -22,6 +22,7 @@ object Main extends App {
   implicit val executionContext = system.dispatcher
   implicit val materializer = ActorMaterializer()
 
+  val actionLogTopicName = "actionLog"
   val client = new StravaClient(host = "localhost", port = 8001)
   val consumerSettings = ConsumerSettings(system, new ByteArrayDeserializer, new StringDeserializer)
     .withBootstrapServers("localhost:9092")
@@ -43,6 +44,11 @@ object Main extends App {
 
   val taskToString = Flow[Task].map(_.workouts.toJson.compactPrint)
 
+  val taskToLog = Flow[Task].map{
+    task =>
+      new ProducerRecord[Array[Byte], String](actionLogTopicName, "true")
+  }
+
   def splitter(task: Task) = if(task.workouts.isDefined) 1 else 0
 
   // @formatter:off
@@ -58,15 +64,19 @@ object Main extends App {
       val B: FlowShape[ConsumerRecord[Array[Byte], String], Task] = builder.add(recordToTask)
       val C: FlowShape[Task, ProducerRecord[Array[Byte], String]] = builder.add(taskToRecord)
       val F: FlowShape[Task, String] = builder.add(taskToString)
+      val G: FlowShape[Task, ProducerRecord[Array[Byte], String]] = builder.add(taskToLog)
       val split = builder.add(Partition[Task](2, splitter))
+      val bcast = builder.add(Broadcast[Task](2))
 
       // Sinks
       val D = builder.add(Sink.foreach(client.postWorkouts)).in
       val E: Inlet[ProducerRecord[Array[Byte], String]] = builder.add(Producer.plainSink(producerSettings)).in
 
       // Graph
-      A ~> B ~> split ~> C ~> E
-                split ~> F ~> D
+      A ~> B ~> bcast ~> G ~> E //to activity log
+                bcast ~> split ~> C ~> E //back to workers
+                         split ~> F ~> D //to target
+
 
       ClosedShape
   }).run()
