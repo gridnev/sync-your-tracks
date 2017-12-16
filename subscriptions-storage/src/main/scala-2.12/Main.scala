@@ -18,9 +18,9 @@ object Main extends App with DependencyModule {
   )
 
   val route = controllers.map(_.route).reduce(_ ~ _)
-  val bindingFuture = Http().bindAndHandle(route, "localhost", 8001)
+  val bindingFuture = Http().bindAndHandle(route, "localhost", 8002)
 
-  println(s"Server online at http://localhost:8001/\nPress RETURN to stop...")
+  println(s"Server online at http://localhost:8002/\nPress RETURN to stop...")
   StdIn.readLine()
   bindingFuture
     .flatMap(_.unbind())

@@ -1,41 +1,29 @@
 import akka.actor.ActorSystem
-import akka.kafka.{ConsumerSettings, ProducerMessage, ProducerSettings, Subscriptions}
 import akka.kafka.scaladsl.{Consumer, Producer}
-import akka.stream.ActorMaterializer
-import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.common.serialization._
+import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
+import akka.stream._
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, StringDeserializer, StringSerializer}
 import spray.json._
+import akka.stream.scaladsl._
+import model.JsonFormats._
+import model.{ActionEvent, Task, TaskResult}
 import DefaultJsonProtocol._
-import akka.stream.scaladsl.Sink
 import clients.EndomondoClient
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.util.control.NonFatal
 
 /**
-  * Created by Denis Gridnev on 24.07.2017.
+  * Created by Denis Gridnev on 29.07.2017.
   */
 object Main extends App {
-  case class Workout(distance: String, elapsed_time: String, id: String)
-  case class Task(source: Source, target: Target, workouts: Option[Seq[Workout]] = None)
-  case class Source(id: String/*, data:ConnectionData*/)
-  case class ConnectionData()
-
-  case class Target(id: String/*, data:String*/)
-
-  implicit val t1 = jsonFormat1(Source)
-  implicit val t2 = jsonFormat1(Target)
-  implicit val t3 = jsonFormat3(Workout)
-  implicit val colorFormat = jsonFormat3(Task)
-
-  val host = "localhost"
-  val port = 8001
-
-  val client = new EndomondoClient(host, port, "123", "123")
-
   implicit val system = ActorSystem("kafka")
-  implicit val executionContext: ExecutionContext = system.dispatcher
+  implicit val executionContext = system.dispatcher
   implicit val materializer = ActorMaterializer()
 
+  val actionEventTopicName = "action-event"
+  val client = new EndomondoClient(host = "localhost", port = 8001)
   val consumerSettings = ConsumerSettings(system, new ByteArrayDeserializer, new StringDeserializer)
     .withBootstrapServers("localhost:9092")
     .withGroupId("group1")
@@ -44,9 +32,75 @@ object Main extends App {
   val producerSettings = ProducerSettings(system, new ByteArraySerializer, new StringSerializer)
     .withBootstrapServers("localhost:9092")
 
-  Consumer.plainSource(consumerSettings, Subscriptions.topics("endomondo"))
-    .map { msg =>
-      val task = JsonParser(msg.value).convertTo[Task]
-      task.workouts.toJson.compactPrint
-    }.runWith(Sink.foreach(client.postWorkouts))
+  val recordToTask = Flow[ConsumerRecord[Array[Byte], String]].map(x => JsonParser(x.value).convertTo[Task])
+  val taskToRecord = Flow[Task].mapAsync(1){
+    task =>
+      client.getWorkouts() map {
+        workouts =>
+          val nextTask = task.copy(workouts = Some(workouts))
+          new ProducerRecord[Array[Byte], String](task.target.id, nextTask.toJson.compactPrint)
+      }
+  }
+
+  val taskToLog = Flow[Task].map{
+    task =>
+      new ProducerRecord[Array[Byte], String](actionEventTopicName,
+        ActionEvent(
+          subId = task.id,
+          result = TaskResult(
+            success = true,
+            wCount = Some(task.workouts.size))).toJson.compactPrint)
+  }
+
+  val taskToActionEvent = Flow[Task].mapAsync(1) { task =>
+    client.postWorkouts(task.workouts.toJson.compactPrint).map { _ =>
+      new ProducerRecord[Array[Byte], String](actionEventTopicName,
+        ActionEvent(
+          subId = task.id,
+          result = TaskResult(
+            success = true,
+            wCount = Some(task.workouts.size))).toJson.compactPrint)
+    }
+      .recover {
+        case NonFatal(e) => new ProducerRecord[Array[Byte], String](actionEventTopicName,
+          ActionEvent(
+            subId = task.id,
+            result = TaskResult(
+              success = false,
+              errorMessage = Some(e.getMessage))).toJson.compactPrint)
+      }
+  }
+
+  def splitter(task: Task) = if(task.workouts.isDefined) 1 else 0
+
+  // @formatter:off
+  RunnableGraph.fromGraph(GraphDSL.create() {
+    implicit builder =>
+      import GraphDSL.Implicits._
+
+      //Source
+      val A: Outlet[ConsumerRecord[Array[Byte], String]] =
+        builder.add(Consumer.plainSource(consumerSettings, Subscriptions.topics("endomondo"))).out
+
+      // Flows
+      val B: FlowShape[ConsumerRecord[Array[Byte], String], Task] = builder.add(recordToTask)
+      val C: FlowShape[Task, ProducerRecord[Array[Byte], String]] = builder.add(taskToRecord)
+      val F: FlowShape[Task, ProducerRecord[Array[Byte], String]] = builder.add(taskToActionEvent)
+      //val G: FlowShape[Task, ProducerRecord[Array[Byte], String]] = builder.add(taskToLog)
+      //val D = builder.add(Sink.foreach(client.postWorkouts)).in
+      val split = builder.add(Partition[Task](2, splitter))
+      //val bcast = builder.add(Broadcast[Task](2))
+
+      // Sinks
+      val E: Inlet[ProducerRecord[Array[Byte], String]] = builder.add(Producer.plainSink(producerSettings)).in
+      val E1: Inlet[ProducerRecord[Array[Byte], String]] = builder.add(Producer.plainSink(producerSettings)).in
+
+      // Graph
+      A ~> B ~> split ~> C ~> E //back to workers
+                split ~> F ~> E1 //to target
+
+
+      ClosedShape
+  }).run()
+  // @formatter:on
 }

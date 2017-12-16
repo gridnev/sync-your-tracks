@@ -12,7 +12,7 @@ import scala.concurrent.Future
   */
 class StravaClient(host: String, port: Int)(implicit system: ActorSystem) extends BaseClient(host, port) {
   def getWorkouts(): Future[Seq[Workout]] = {
-    sendAndReceiveAs[Seq[Workout]](Get(s"/workouts"))
+    sendAndReceiveAs[Seq[Workout]](Get(s"/strava/workouts"))
   }
 
   def postWorkouts(workouts: String): Future[Unit] = {

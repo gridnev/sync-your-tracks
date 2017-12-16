@@ -1,0 +1,1 @@
+cmd /k "W:\mongo\mongodb\bin\mongod" --dbpath W:\mongo\data\db

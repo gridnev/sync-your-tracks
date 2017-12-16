@@ -22,14 +22,14 @@ object Main extends App {
   implicit val executionContext: ExecutionContext = system.dispatcher
   implicit val materializer = ActorMaterializer()
 
-  val subscriptionClient = new SubscriptionClient(host = "localhost", port = 8001)
+  val subscriptionClient = new SubscriptionClient(host = "localhost", port = 8002)
   val producerSettings = ProducerSettings(system, new ByteArraySerializer, new StringSerializer)
     .withBootstrapServers("localhost:9092")
 
   val tickToSubscriptions = Flow[Unit].mapAsync(1)(_ => subscriptionClient.getSubscriptions())
   val SeqToSingle = Flow[Seq[Subscription]].mapConcat(toImmutable)
   val subscriptionToRecord = Flow[Subscription].map(sub =>
-    new ProducerRecord[Array[Byte], String](sub.source.id, Task(sub.source, sub.target).toJson.compactPrint))
+    new ProducerRecord[Array[Byte], String](sub.source.id, Task(sub.userId, sub.source, sub.target).toJson.compactPrint))
 
   // @formatter:off
   RunnableGraph.fromGraph(GraphDSL.create() {

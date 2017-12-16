@@ -16,6 +16,6 @@ class ClientHandler extends Actor {
     case Join(id) =>
       clients.update(id, sender())
     case Notify(id, message) =>
-      clients(id) ! PushMessage(message)
+      clients.get(id).foreach(_ ! PushMessage(message))
   }
 }

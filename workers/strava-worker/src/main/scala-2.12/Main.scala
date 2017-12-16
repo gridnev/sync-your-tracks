@@ -1,3 +1,5 @@
+import java.time.LocalDateTime
+
 import akka.actor.ActorSystem
 import akka.kafka.scaladsl.{Consumer, Producer}
 import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
@@ -9,10 +11,10 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import spray.json._
 import akka.stream.scaladsl._
 import model.JsonFormats._
-import model.Task
+import model.{ActionEvent, Task, TaskResult}
 import DefaultJsonProtocol._
 
-import scala.concurrent.ExecutionContext
+import scala.util.control.NonFatal
 
 /**
   * Created by Denis Gridnev on 29.07.2017.
@@ -22,7 +24,7 @@ object Main extends App {
   implicit val executionContext = system.dispatcher
   implicit val materializer = ActorMaterializer()
 
-  val actionLogTopicName = "actionLog"
+  val actionEventTopicName = "action-event"
   val client = new StravaClient(host = "localhost", port = 8001)
   val consumerSettings = ConsumerSettings(system, new ByteArrayDeserializer, new StringDeserializer)
     .withBootstrapServers("localhost:9092")
@@ -42,11 +44,33 @@ object Main extends App {
       }
   }
 
-  val taskToString = Flow[Task].map(_.workouts.toJson.compactPrint)
-
   val taskToLog = Flow[Task].map{
     task =>
-      new ProducerRecord[Array[Byte], String](actionLogTopicName, "true")
+      new ProducerRecord[Array[Byte], String](actionEventTopicName,
+        ActionEvent(
+          subId = task.id,
+          result = TaskResult(
+            success = true,
+            wCount = Some(task.workouts.size))).toJson.compactPrint)
+  }
+
+  val taskToActionEvent = Flow[Task].mapAsync(1) { task =>
+    client.postWorkouts(task.workouts.toJson.compactPrint).map { _ =>
+      new ProducerRecord[Array[Byte], String](actionEventTopicName,
+        ActionEvent(
+          subId = task.id,
+          result = TaskResult(
+            success = true,
+            wCount = Some(task.workouts.size))).toJson.compactPrint)
+    }
+      .recover {
+        case NonFatal(e) => new ProducerRecord[Array[Byte], String](actionEventTopicName,
+          ActionEvent(
+            subId = task.id,
+            result = TaskResult(
+              success = false,
+              errorMessage = Some(e.getMessage))).toJson.compactPrint)
+      }
   }
 
   def splitter(task: Task) = if(task.workouts.isDefined) 1 else 0
@@ -63,19 +87,19 @@ object Main extends App {
       // Flows
       val B: FlowShape[ConsumerRecord[Array[Byte], String], Task] = builder.add(recordToTask)
       val C: FlowShape[Task, ProducerRecord[Array[Byte], String]] = builder.add(taskToRecord)
-      val F: FlowShape[Task, String] = builder.add(taskToString)
-      val G: FlowShape[Task, ProducerRecord[Array[Byte], String]] = builder.add(taskToLog)
+      val F: FlowShape[Task, ProducerRecord[Array[Byte], String]] = builder.add(taskToActionEvent)
+      //val G: FlowShape[Task, ProducerRecord[Array[Byte], String]] = builder.add(taskToLog)
+      //val D = builder.add(Sink.foreach(client.postWorkouts)).in
       val split = builder.add(Partition[Task](2, splitter))
-      val bcast = builder.add(Broadcast[Task](2))
+      //val bcast = builder.add(Broadcast[Task](2))
 
       // Sinks
-      val D = builder.add(Sink.foreach(client.postWorkouts)).in
       val E: Inlet[ProducerRecord[Array[Byte], String]] = builder.add(Producer.plainSink(producerSettings)).in
+      val E1: Inlet[ProducerRecord[Array[Byte], String]] = builder.add(Producer.plainSink(producerSettings)).in
 
       // Graph
-      A ~> B ~> bcast ~> G ~> E //to activity log
-                bcast ~> split ~> C ~> E //back to workers
-                         split ~> F ~> D //to target
+      A ~> B ~> split ~> C ~> E //back to workers
+                split ~> F ~> E1 //to target
 
 
       ClosedShape
