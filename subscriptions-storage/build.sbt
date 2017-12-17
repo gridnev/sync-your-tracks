@@ -1,3 +1,4 @@
+
 name := "subscriptions-storage"
 
 version := "1.0"
@@ -13,3 +14,6 @@ libraryDependencies ++= Seq(
   "org.mongodb.scala" %% "mongo-scala-driver" % "2.1.0",
   "com.typesafe.akka" %% "akka-http-spray-json" % "10.0.7"
 )
+
+enablePlugins(JavaAppPackaging)
+enablePlugins(DockerPlugin)
