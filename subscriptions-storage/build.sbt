@@ -12,7 +12,8 @@ libraryDependencies ++= Seq(
   "com.softwaremill.macwire" %% "util" % "2.3.0",
   "com.softwaremill.macwire" %% "proxy" % "2.3.0",
   "org.mongodb.scala" %% "mongo-scala-driver" % "2.1.0",
-  "com.typesafe.akka" %% "akka-http-spray-json" % "10.0.7"
+  "com.typesafe.akka" %% "akka-http-spray-json" % "10.0.7",
+  "io.netty" % "netty-all" % "4.1.19.Final"
 )
 
 enablePlugins(JavaAppPackaging)
